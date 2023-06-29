@@ -66,6 +66,7 @@ class Esn(object):
         self.W_out = data
 
     def clear_mode(self):
+        self.state = np.zeros(self.n_reservoir)
         self.init_weights()
 
     def init_weights(self, sig=0.008):

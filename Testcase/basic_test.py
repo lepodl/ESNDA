@@ -31,11 +31,11 @@ class TestCase(unittest.TestCase):
         return loss
 
     @staticmethod
-    def prediction_power(x, y, dt=0.01, unit=0.91):
+    def prediction_power(x, y, dt=0.02, unit=0.91):
         loss = np.linalg.norm(x - y, ord=2, axis=0) / np.linalg.norm(x, ord=2, axis=0)
-        if (loss[:20] < 0.1).all():
+        if (loss[:30] < 0.5).all():
             try:
-                out = np.where(loss > 0.22)[0][0]
+                out = np.where(loss > 0.5)[0][0]
             except:
                 out = x.shape[1]
         else:
@@ -49,12 +49,15 @@ class TestCase(unittest.TestCase):
         lyapunov_exp = 0.91
         train_length = int(train_time / lyapunov_exp / dt)
         test_length = int(test_time / lyapunov_exp / dt)
-        np.random.seed(10000)
+        # np.random.seed(1000)
         coords = np.random.rand(3) * 10
         model = Lorenz(10., 28., 8 / 3, dt, *coords)
-        states = model.propagate(train_length + test_length + 2000, 1000, noise=noise)
-        train_data = states[:, :train_length]
-        test_data = states[:, train_length:train_length + test_length]
+        states = model.propagate(train_length, 1000, noise=noise)
+        assert states.shape[1] == train_length
+        train_data = states
+        coords_new = states[:, -1]
+        model = Lorenz(10., 28., 8 / 3, dt, *coords_new)
+        test_data = model.propagate(test_length, 1, noise=None)
         return train_data, test_data
 
     def single_plot(self, target, prediction):
@@ -86,12 +89,12 @@ class TestCase(unittest.TestCase):
         return fig
 
     def _test_basic_esn_prediction(self):
-        train_data, test_data = self.initialize_data(100, 20)
+        train_data, test_data = self.initialize_data(50, 20)
         esn = Esn(n_inputs=3,
                   n_outputs=3,
                   n_reservoir=100,
-                  leaky_rate=0.9,
-                  spectral_radius=1.,
+                  leaky_rate=0.5,
+                  spectral_radius=0.2,
                   random_state=1,
                   sparsity=0.4,
                   silent=False,
@@ -111,26 +114,25 @@ class TestCase(unittest.TestCase):
         plt.show()
 
     def test_esnda_prediction(self):
-        train_data, test_data = self.initialize_data(100, 20)
+        train_data, test_data = self.initialize_data(20, 10, noise=None)
         esn = Esn(n_inputs=3,
                   n_outputs=3,
-                  n_reservoir=92,
-                  leaky_rate=0.987,
-                  spectral_radius=0.148,
-                  random_state=100,
+                  n_reservoir=100,
+                  leaky_rate=0.9,
+                  spectral_radius=0.2,
+                  random_state=None,
                   sparsity=0.4,
                   silent=False,
-                  ridge_param=1e-3,
+                  ridge_param=1e-5,
                   washout=400)
 
         test_inputs, test_targets = test_data[:, :], test_data[:, 1:]
         test_length = test_targets.shape[1]
 
-        eta = 1.
-        dt = 0.01
-        noise_train_data = train_data + np.random.multivariate_normal(np.zeros(3), np.eye(3) * eta,
-                                                                      size=train_data.shape[1]).T
-        esn.fit_da(noise_train_data, ensembles=500, observation_noise=eta, model_noise=None, initial_w_dist=1000.)
+        eta = 10
+        dt = 0.02
+        noise_train_data = train_data + np.random.multivariate_normal(np.zeros(3), np.eye(3) * eta, size=train_data.shape[1]).T
+        esn.fit_da(noise_train_data, ensembles=500, observation_noise=eta, model_noise=None, initial_w_dist=5000.)
         prediction = esn.auto_evolve(test_inputs[:, 0], n_iteration=test_length)
         pred_power = self.prediction_power(test_targets, prediction)
         loss = self.distance(test_targets, prediction)
@@ -140,53 +142,54 @@ class TestCase(unittest.TestCase):
 
         lyapunov_exp = 0.91
         max_time_unit = int(test_length * dt * lyapunov_exp) + 1
-        time_ticks = [l / lyapunov_exp / dt for l in range(max_time_unit)]
-        fig, ax = plt.subplots(4, 2, figsize=(8, 5))
+        time_ticks = [l / lyapunov_exp / dt for l in range(0, max_time_unit, 2)]
+        fig, ax = plt.subplots(4, 2, figsize=(10, 5), dpi=200)
         coords = ["x coordinate", "y coordinate", "z coordinate"]
 
         for i in range(3):
-            ax[i, 0].plot(range(test_length), test_targets[i, :], 'k', lw=0.5, label="target system")
-            ax[i, 0].plot(range(test_length), prediction[i, :], 'r', lw=0.5, label="free running RFDA")
+            ax[i, 0].plot(range(test_length), test_targets[i, :], 'k', lw=1., label="target system")
+            ax[i, 0].plot(range(test_length), prediction[i, :], 'r', lw=1., label="learned system")
             ax[i, 0].set_xticks([])
-            ax[i, 0].text(0.1, 0.8, coords[i], fontsize=10, ha='center', va='center', color='b',
+            ax[i, 0].text(0.1, 0.85, coords[i], fontsize=10, ha='center', va='center', color='b',
                           transform=ax[i, 0].transAxes)
-        ax[3, 0].plot(range(test_length), loss, 'k', lw=0.5, label="loss")
+        ax[3, 0].plot(range(test_length), loss, 'k', lw=1., label="loss")
         ax[3, 0].legend(loc=(0.05, 0.7), fontsize=8)
         ax[0, 0].legend(loc=(0.81, 1.1), fontsize='x-small')
         ax[3, 0].set_xticks(time_ticks)
-        ax[3, 0].set_xticklabels(np.arange(max_time_unit))
+        ax[3, 0].set_xticklabels(np.arange(0, max_time_unit, 2))
         ax[3, 0].set_xlabel('$ \lambda_{max}t $')
         ax[0, 0].set_title(f"ESN with DA|Power {pred_power:.2f}", fontsize=10)
 
-        esn = Esn(n_inputs=3,
-                  n_outputs=3,
-                  n_reservoir=92,
-                  leaky_rate=0.987,
-                  spectral_radius=0.148,
-                  random_state=100,
-                  sparsity=0.4,
-                  silent=False,
-                  ridge_param=1e-3,
-                  washout=400)
+        # esn = Esn(n_inputs=3,
+        #           n_outputs=3,
+        #           n_reservoir=100,
+        #           leaky_rate=0.9,
+        #           spectral_radius=0.2,
+        #           random_state=None,
+        #           sparsity=0.4,
+        #           silent=False,
+        #           ridge_param=1e-5,
+        #           washout=400)
+        esn.clear_mode()
         _ = esn.fit(noise_train_data)
         prediction = esn.auto_evolve(test_inputs[:, 0], n_iteration=test_length)
         pred_power = self.prediction_power(test_targets, prediction)
         loss = self.distance(test_targets, prediction)
 
         for i in range(3):
-            ax[i, 1].plot(range(test_length), test_targets[i, :], 'k', lw=0.5, label="target system")
-            ax[i, 1].plot(range(test_length), prediction[i, :], 'r', lw=0.5, label="free running RFDA")
+            ax[i, 1].plot(range(test_length), test_targets[i, :], 'k', lw=1., label="target system")
+            ax[i, 1].plot(range(test_length), prediction[i, :], 'r', lw=1., label="learned system")
             ax[i, 1].set_xticks([])
             ax[i, 1].text(0.1, 0.8, coords[i], fontsize=10, ha='center', va='center', color='b',
                           transform=ax[i, 1].transAxes)
-        ax[3, 1].plot(range(test_length), loss, 'k', lw=0.5, label="loss")
+        ax[3, 1].plot(range(test_length), loss, 'k', lw=1., label="loss")
         ax[3, 1].legend(loc=(0.05, 0.7), fontsize=8)
         ax[0, 1].legend(loc=(0.81, 1.1), fontsize='x-small')
         ax[3, 1].set_xticks(time_ticks)
-        ax[3, 1].set_xticklabels(np.arange(max_time_unit))
+        ax[3, 1].set_xticklabels(np.arange(0, max_time_unit, 2))
         ax[3, 1].set_xlabel('$ \lambda_{max}t $')
         ax[0, 1].set_title(f"ESN with LR| Power {pred_power:.2f}", fontsize=10)
-        # fig.savefig(os.path.join('results/DAvsLR.png'), dpi=100)
+        # fig.savefig('results/DAvsLR_demo.png', dpi=200)
         plt.show()
 
     def _test_plot_noise_compare(self):

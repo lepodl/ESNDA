@@ -44,11 +44,11 @@ class Lorenz(object):
 
     def propagate(self, n, n_washout=1000, require_detail=False, noise=0.2):
         t = 0.
-        out = np.empty((3, n, 4))
+        out = np.empty((3, n+n_washout, 4))
         out[:, 0, 0] = self.state
         if noise is None:
             # print('no inner noise')
-            for i in range(1, n):
+            for i in range(1, n+n_washout):
                 k1 = self.delta_t * self.func(t, self.state)
                 k2 = self.delta_t * self.func(t + self.delta_t / 2, self.state + k1 / 2)
                 k3 = self.delta_t * self.func(t + self.delta_t / 2, self.state + k2 / 2)
@@ -59,7 +59,7 @@ class Lorenz(object):
                 t += self.delta_t
         else:
             # print('with inner noise')
-            for i in range(1, n):
+            for i in range(1, n+n_washout):
                 pertubation = np.random.normal(size=(3,)) * noise
                 k1 = self.delta_t * (self.func(t, self.state) + pertubation)
                 k2 = self.delta_t * self.func(t + self.delta_t / 2, self.state + k1 / 2)
