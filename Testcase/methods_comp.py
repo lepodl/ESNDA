@@ -59,7 +59,7 @@ def run(num_trial):
               random_state=num_trial,
               sparsity=0.4,
               silent=True,
-              ridge_param=1e-5,
+              ridge_param=1e-3,
               washout=400)
     ind = rank // 10
     idx = rank % 10
@@ -75,8 +75,8 @@ def run(num_trial):
     out = prediction_power(test_targets, prediction)
 
     model.clear_mode()
-    model_noise = None if dyn_noise_here is None else dyn_noise_here / 2
-    model.fit_da(noise_train_data, ensembles=500, observation_noise=obs_noise[idx], model_noise=None, initial_w_dist=5000.)
+    model.reset_wout()  # Annotate this in reproducing the Testcase/results/methods_comp_final.png
+    model.fit_da(noise_train_data, ensembles=500, observation_noise=obs_noise[idx], model_noise=None, initial_w_dist=10000.)
     prediction = model.auto_evolve(test_inputs[:, 0], n_iteration=test_length)
     pred_power = prediction_power(test_targets, prediction)
     print(f"done | lr vs da|power {out:.2f}")
@@ -120,7 +120,7 @@ if rank == size - 1:
         powers = total_powers[1,]
         powers_mean = powers[:, :, i].mean(1)
         powers_std = powers[:, :, i].std(1)
-        axes['B'].errorbar(np.linspace(-2, 2, 10, endpoint=True), powers_mean, yerr=powers_std, fmt='o:', ecolor='hotpink', capsize=3., capthick=1., errorevery=2, label=names[i])
+        axes['B'].errorbar(np.linspace(-2, 1, 10, endpoint=True), powers_mean, yerr=powers_std, fmt='o:', ecolor='hotpink', capsize=3., capthick=1., errorevery=2, label=names[i])
     axes['B'].set_xlabel("$log \eta$")
     axes['B'].set_ylabel("Power")
     axes['B'].legend(loc="best")

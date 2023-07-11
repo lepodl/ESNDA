@@ -35,7 +35,8 @@ class Esn(object):
         self.W = None
         self.W_in = None
         self.W_bias = None
-        self.W_out = np.zeros((n_outputs, n_reservoir))
+
+        self.W_out = np.zeros((self.n_outputs, self.n_reservoir))
         self.W_out_dim = n_outputs * n_reservoir
 
         if isinstance(random_state, np.random.RandomState):
@@ -64,6 +65,9 @@ class Esn(object):
     def read_out(self, data):
         assert data.shape == self.W_out.shape
         self.W_out = data
+
+    def reset_wout(self):
+        self.W_out = np.zeros((self.n_outputs, self.n_reservoir))
 
     def clear_mode(self):
         self.state = np.zeros(self.n_reservoir)
